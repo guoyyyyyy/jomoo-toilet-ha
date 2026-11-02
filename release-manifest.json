@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0-beta1",
+  "status": "prerelease-not-hardware-tested",
+  "chip": "ESP32-C3",
+  "flash": "4MB",
+  "supported_model": "SQ9650",
+  "firmware_base": "ESPHome2026.10.0",
+  "api_security": "plaintext trusted LAN only",
+  "files": {
+    "jomoo-c3-0.1.0-beta1.factory.bin": {
+      "sha256": "12cbc7a2cd0b319def18b78e6b374c994b9d3211dfb50ca72b4691e36957d20a",
+      "bytes": 1453216
+    },
+    "jomoo-c3-0.1.0-beta1-source.zip": {
+      "sha256": "b4cc63b3a2595a0e5e256ac8299edd1102d718c78732c35c9d36dab99a92c390",
+      "bytes": 8606581
+    }
+  }
+}
+
