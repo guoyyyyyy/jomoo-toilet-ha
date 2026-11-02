@@ -1,0 +1,57 @@
+name: Publish reviewed firmware beta
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/publish.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-beta1
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify assets and publish prerelease through GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: python
+        run: |
+          import os, json, urllib.request, urllib.error, hashlib
+          repo = os.environ['GITHUB_REPOSITORY']
+          commit = os.environ['GITHUB_SHA']
+          tag = 'v0.1.0-beta1'
+          api = 'https://api.github.com/repos/' + repo
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'jomoo-release'}
+          def request(url, data=None, extra=None):
+              h = dict(headers)
+              if extra: h.update(extra)
+              with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=h)) as r:
+                  return r.read()
+          names = ['jomoo-c3-0.1.0-beta1.factory.bin', 'jomoo-c3-0.1.0-beta1-source.zip']
+          sums = request('https://raw.githubusercontent.com/' + repo + '/' + commit + '/SHA256SUMS')
+          expected = {line.split()[1]: line.split()[0] for line in sums.decode().splitlines() if line.strip()}
+          assets = {}
+          for name in names:
+              content = request('https://raw.githubusercontent.com/' + repo + '/' + commit + '/releases/' + tag + '/' + name)
+              assert hashlib.sha256(content).hexdigest() == expected[name], 'Checksum mismatch: ' + name
+              assets[name] = content
+          assets['SHA256SUMS'] = sums
+          assets['LICENSE-ESPHome.txt'] = request('https://raw.githubusercontent.com/' + repo + '/' + commit + '/LICENSE-ESPHome.txt')
+          try:
+              release = json.loads(request(api + '/releases/tags/' + tag))
+          except urllib.error.HTTPError as e:
+              if e.code != 404: raise
+              body = {'tag_name': tag, 'target_commitish': commit, 'name': 'SQ9650 ESP32-C3 通用配置测试版 v0.1.0-beta1', 'prerelease': True, 'body': '九牧 SQ9650 / ESP32-C3 SuperMini 4MB 蓝牙桥接测试版。支持热点配网、用户填写目标蓝牙地址、Home Assistant 接入和按需连接。通用版尚未现场验收，其他型号未验证。API/网页无认证明文，仅限可信家庭局域网，禁止直接暴露公网。USB刷入 factory.bin。对应源码包和许可证随附件提供。刷机及配置步骤见仓库 使用与刷机.md。'}
+              release = json.loads(request(api + '/releases', json.dumps(body).encode(), {'Content-Type': 'application/json'}))
+          existing = {a['name']: a for a in release.get('assets', [])}
+          for name, content in assets.items():
+              if name in existing:
+                  assert existing[name]['size'] == len(content), 'Existing asset size mismatch'
+                  continue
+              result = json.loads(request('https://uploads.github.com/repos/' + repo + '/releases/' + str(release['id']) + '/assets?name=' + name, content, {'Content-Type': 'application/octet-stream'}))
+              assert result['size'] == len(content)
+              print('Uploaded', name, len(content))
+          print(release['html_url'])
+
